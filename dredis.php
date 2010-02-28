@@ -26,10 +26,12 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 	if($redis = dredis_connect($table)) {
 		$full_key = dredis_key($key, $table);
 		$redis->set($full_key, $value);
+		drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
 
 		// Set expiry date if specified
 		if($expire) {
 			$redis->setTimeout($full_key, $expire);
+			drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
 		}
 		else if($expire == -1) {
 			$redis->sAdd($table . ':temporary', $full_key);
@@ -102,7 +104,7 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 }
 
 function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
-
+  drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
 	if($redis = dredis_connect($table)) {
 		if ($wildcard) {
 			if ($cid == '*') {
@@ -113,12 +115,15 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
 				$allKeys = $redis->getKeys(dredis_key($cid . '*', $table));
 				foreach($allKeys as $key){
 					$redis->delete($key);
+					drupal_set_message('dredis_delete Deleted Key : ' . $key);
 					$redis->sRemove($table . ':temporary', $key);
 				}
 			}
 		}
 		else {
-			$redis->delete(dredis($key, $table));
+			$key = dredis_key($cid, $table);
+			$redis->delete($key);
+			drupal_set_message('dredis_delete Deleted Key : ' . urldecode($key));
 			$redis->sRemove($table . ':temporary', $key);
 		}
 	}
