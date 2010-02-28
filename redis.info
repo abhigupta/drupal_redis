@@ -1,0 +1,3 @@
+name = Redis
+description = High performance integration with Redis.
+package = Caching
