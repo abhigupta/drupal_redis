@@ -6,17 +6,19 @@
  * http://code.google.com/p/redis/
  */
 
-
-function page_fast_cache() {
-	return $this->fast_cache;
-}
+//
+//function page_fast_cache() {
+//	return $this->fast_cache;
+//}
 
 function dredis_get($key, $table = 'cache') {
 
 	if($redis = dredis_connect($table)){
 		$cache = $redis->get(dredis_key($key, $table));
+		drupal_set_message('dredis_get Get Key : ' . urldecode(dredis_key($key, $table)));
 		return $cache;
 	}
+	return FALSE;
 }
 
 function dredis_set($key, $value, $expire = 0, $table = 'cache') {
@@ -103,11 +105,12 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
 
 	if($redis = dredis_connect($table)) {
 		if ($wildcard) {
-			if ($key == '*') {
+			if ($cid == '*') {
 				$redis->flushDB();
 			}
 			else {
-				$allKeys = $redis->getKeys(dredis_key($cid, $table));
+				//Delete all the keys begging with $cid using wildcard
+				$allKeys = $redis->getKeys(dredis_key($cid . '*', $table));
 				foreach($allKeys as $key){
 					$redis->delete($key);
 					$redis->sRemove($table . ':temporary', $key);
@@ -133,9 +136,10 @@ function dredis_flush($table = 'cache_page') {
 	if($redis = dredis_connect($table)) {
 		// Get all the keys from temporary set.
 		$keys = $redis->sMembers($table .':temporary');
-		$delete_keys = "'" . implode("', '", $keys) . "'";
-		foreach($delete_keys as $key) {
+		//$delete_keys = "'" . implode("', '", $keys) . "'";
+		foreach($keys as $key) {
 			$redis->delete($key);
+			drupal_set_message('dredis_flush Deleting Key : ' . $key);
 		}
 		$redis->delete($table .':temporary');
 		//  		$redis->delete($delete_keys)
@@ -172,16 +176,17 @@ function dredis_flush($table = 'cache_page') {
 function dredis_connect($table = 'cache') {
 	static $redis;
 
-	$server = reset($this->settings['server']);
-	list($host, $port) = explode(':', $server);
+	$server = variable_get('redis_servers', array('127.0.0.1:6379'));
+	list($host, $port) = explode(':', $server[0]);
 
 	if(is_null($redis)){
 		/// @todo Add redis as static variable. Don't reconnect for every cache bin.
-		$redis = &new Redis();
+		$redis = new Redis();
 	}
 
-	if (!$redis->connect('127.0.0.1', 6379)) {
-		_cache_early_watchdog('cache', 'Unable to connect to Redis server %host:%port', array('%host' => $host, '%port' => $port), WATCHDOG_ERROR);
+	if (!$redis->connect($host, $port)) {
+		//_cache_early_watchdog('cache', 'Unable to connect to Redis server %host:%port', array('%host' => $host, '%port' => $port), WATCHDOG_ERROR);
+		exit('Could Not Connect');
 		return FALSE;
 	}
 
@@ -192,6 +197,7 @@ function dredis_connect($table = 'cache') {
 		}
 	}
 
+
 	//    if (variable_get('redis_cache_clear_all', FALSE) == TRUE) {
 	//      /// @todo Add ability to clear only specified Redis database. e.g. when we don't want to clear cache_form bin.
 	//      $this->redis->flushall();
@@ -200,9 +206,9 @@ function dredis_connect($table = 'cache') {
 	return $redis;
 }
 
-function close() {
-	$this->redis->close();
-}
+//function close() {
+//	$this->redis->close();
+//}
 
 /**
  * Statistics information.
@@ -260,31 +266,36 @@ function dredis_key($key, $bin = 'cache') {
 function dredis_db($table = 'cache') {
 	static $mapping = array();
 
-	if (isset($bins[$table])){
-		$return = (int)$bins[$table];
+	if (isset($mapping[$table])){
+		$return = $mapping[$table];
 	}
 
-	if (empty($bins)) {
+	if (!count($mapping)) {
 		//TODO: Store mapping in redis itself, use variable table as backup
-		$mapping = variable_get('redis_table_mapping', array());
+		drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
+		$mapping = variable_get('redis_bins', array());
+		drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
 
 		if(count($mapping) && isset($mapping[$table])) {
-			$return = (int)$mapping[$table];
+			$return = $mapping[$table];
+			drupal_set_message('Mappings returned from DB : ' . $return);
 		}
 		else {
-			$core = array('cache', 'cache_block', 'cache_form', 'cache_filter', 'cache_page');
-			$cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
+			$core = array('cache', 'cache_block', 'cache_form', 'cache_filter', 'cache_page', 'cache_menu');
+			//			$cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
+			$cache_tables = $core;
 
 			sort($cache_tables);
 			$max = count($cache_tables);
 			for($i = 1; $i <= $max; $i++){
 				$mapping[$cache_tables[($i-1)]] = $i;
 			}
-			variable_set('redis_table_mapping', $mapping);
+			variable_set('redis_bins', $mapping);
+			drupal_set_message('Mappings regenrated : ' . var_export($mapping, true));
 
-			$return = (int)$mapping[$table];
+			$return = isset($mapping[$table]) ? $mapping[$table] : 0;
 		}
 	}
-
-	return $return;
+//	drupal_set_message("{$table} - {$return}");
+	return isset($return) ? $return : 0;
 }

@@ -8,7 +8,7 @@
 require dirname(__FILE__) .'/dredis.php';
 
 // We default this to true
-$conf += array('page_cache_fastpath' => TRUE);
+//$conf += array('page_cache_fastpath' => TRUE);
 
 /**
  * Return data from the persistent cache. Data may be stored as either plain text or as serialized data.
@@ -24,13 +24,13 @@ function cache_get($cid, $table = 'cache') {
   global $user, $conf;
 
   // Garbage collection necessary when enforcing a minimum cache lifetime
-  $cache_flush = variable_get('cache_flush_'. $table, 0);
-  if ($cache_flush && ($cache_flush + variable_get('cache_lifetime', 0) <= time())) {
-    // Reset the variable immediately to prevent a meltdown in heavy load situations.
-    variable_set('cache_flush_'. $table, 0);
-    // Time to flush old cache data.
-    dredis_flush($table);
-  }
+//  $cache_flush = variable_get('cache_flush_'. $table, 0);
+//  if ($cache_flush && ($cache_flush + variable_get('cache_lifetime', 0) <= time())) {
+//    // Reset the variable immediately to prevent a meltdown in heavy load situations.
+//    variable_set('cache_flush_'. $table, 0);
+//    // Time to flush old cache data.
+//    dredis_flush($table);
+//  }
 
   $cache_object = unserialize(dredis_get($cid, $table));
   if (isset($cache_object->data)) {
@@ -135,7 +135,7 @@ function cache_set($cid, $data, $table = 'cache', $expire = CACHE_PERMANENT, $he
   }
   else {
   	$cache->expire = $expire;
-  	$expire = ($created - $expire);
+  	$expire = ($expire - $created);
   }
   // We manually track the expire time in $cache->expire.  When the object
   // expires, we only allow one request to rebuild it to avoid cache stampedes.
@@ -212,47 +212,48 @@ function cache_clear_all($cid = NULL, $table = NULL, $wildcard = FALSE) {
  * set $conf['page_cache_fastpath'] to FALSE in your web-site's
  * settings.php file.
  */
-function _cache_page_cache_fastpath() {
-  global $base_root;
-  global $cache;
-  global $conf;
-
-  if (empty($_POST) && !isset($_COOKIE['cache'])) {
-    if (!isset($cache)) {
-      $cache = new DrupalCache();
-    }
-
-    // In case $conf['cache'] is hardcoded in settings.php.
-    if (isset($conf['cache']) && $conf['cache'] == CACHE_DISABLED) {
-      return FALSE;
-    }
-
-    if ($cache->page_fast_cache('cache_page')) {
-      $page = $cache->get($base_root . request_uri(), 'cache_page');
-      if (!empty($page)) {
-        $set = FALSE;
-        // You might want to hardcode $conf['page_compression'] in settings.php
-        // to speed up things a little.
-        if (!isset($conf['page_compression'])) {
-          $conf['page_compression'] = substr($page->data, 0, 3) == "\x1f\x8b\x08";
-          $set = TRUE;
-        }
-        drupal_page_cache_header($page);
-        if ($set) {
-          unset($conf['page_compression']);
-        }
-        return TRUE;
-      }
-    }
-  }
-  return FALSE;
-}
+//function _cache_page_cache_fastpath() {
+//  global $base_root;
+//  global $cache;
+//  global $conf;
+//
+//  if (empty($_POST) && !isset($_COOKIE['cache'])) {
+//    if (!isset($cache)) {
+//      $cache = new DrupalCache();
+//    }
+//
+//    // In case $conf['cache'] is hardcoded in settings.php.
+//    if (isset($conf['cache']) && $conf['cache'] == CACHE_DISABLED) {
+//      return FALSE;
+//    }
+//
+//    if ($cache->page_fast_cache('cache_page')) {
+//      $page = $cache->get($base_root . request_uri(), 'cache_page');
+//      if (!empty($page)) {
+//        $set = FALSE;
+//        // You might want to hardcode $conf['page_compression'] in settings.php
+//        // to speed up things a little.
+//        if (!isset($conf['page_compression'])) {
+//          $conf['page_compression'] = substr($page->data, 0, 3) == "\x1f\x8b\x08";
+//          $set = TRUE;
+//        }
+//        drupal_page_cache_header($page);
+//        if ($set) {
+//          unset($conf['page_compression']);
+//        }
+//        return TRUE;
+//      }
+//    }
+//  }
+//  return FALSE;
+//}
 
 /**
  * Check is some other module implements page_cache_fastpath() e.g. authcache.
  */
 if (!function_exists('page_cache_fastpath')) {
   function page_cache_fastpath() {
+  	return FALSE;
     return _cache_page_cache_fastpath();
   }
 }
