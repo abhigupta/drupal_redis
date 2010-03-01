@@ -13,6 +13,15 @@
 //	return $this->fast_cache;
 //}
 
+/**
+ * Retrieve value from Redis based on specified Key.
+ *
+ * @param $key
+ *    Name of Key for which value is being fetched.
+ * @param $table = 'cache'
+ *    Name of Table/Bin to get results from
+ * @return Cache Data if found or FALSE
+ */
 function dredis_get($key, $table = 'cache') {
 
   if ($redis = dredis_connect($table)) {
@@ -23,6 +32,24 @@ function dredis_get($key, $table = 'cache') {
   return FALSE;
 }
 
+/**
+ * Store the Key/Value pair in Redis
+ *
+ * If the $expire value is CACHE_TEMPORARY, this function stores the key
+ * names in a Redis SET Labled $table:temporary for use during cache flushes
+ *
+ * @param $key
+ *    The key or cid of the cache value
+ * @param $value
+ *    The value to save with specified key (serialized)
+ * @param $expire
+ *    The time to keep the Key value in the Redis
+ *    $expire = 0 => Never Delete the Key
+ *    $expire = -1 => Key is temporary
+ *
+ * @param $table = 'cache'
+ *    The name of table / bin to store the Key
+ */
 function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 
   if ($redis = dredis_connect($table)) {
@@ -33,6 +60,7 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
     // Set expiry date if specified
     if ($expire > 0) {
       $redis->setTimeout($full_key, $expire);
+//      $redis->sAdd($table .':timed', $full_key);
       //drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
     }
     else if ($expire == -1) {
@@ -104,21 +132,34 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
   //
   //    return FALSE;
 }
-
+/**
+ * Delete cache entries from Redis
+ *
+ * @param $cid = '*'
+ *    Unique ID of the key to delete from DB
+ *    If * is passed with $wildcard = TRUE then everything inside the Redis DB
+ *    is flushed.
+ * @param $wildcard = FALSE
+ *    Set to TRUE to clean keys using wildcards
+ * @param $table = 'cache'
+ *    Name of table where the key is stored
+ */
 function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
   //drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
   if ($redis = dredis_connect($table)) {
-    if ($cid == '*') {
-      return $redis->flushDB();
-    }
     if ($wildcard) {
-      //Delete all the keys begging with $cid using wildcard
-      $allKeys = $redis->getKeys(dredis_key($cid .'*', $table));
-      foreach ($allKeys as $key) {
-        $redis->delete($key);
-        //drupal_set_message('dredis_delete Deleted Key : ' . $key);
-        $redis->sRemove($table .':temporary', $key);
-      }
+    	if ($cid == '*') {
+        return $redis->flushDB();
+    	}
+    	else {
+	      //Delete all the keys begging with $cid using wildcard
+	      $allKeys = $redis->getKeys(dredis_key($cid .'*', $table));
+	      foreach ($allKeys as $key) {
+	      	$redis->delete($key);
+	      	//drupal_set_message('dredis_delete Deleted Key : ' . $key);
+	      	$redis->sRemove($table .':temporary', $key);
+	      }
+    	}
     }
     else {
       $key = dredis_key($cid, $table);
@@ -140,7 +181,7 @@ function dredis_flush($table = 'cache_page') {
   if ($redis = dredis_connect($table)) {
     // Get all the keys from temporary set.
     $keys = $redis->sMembers($table .':temporary');
-    //$delete_keys = "'" . implode("', '", $keys) . "'";
+//    $keys = array_merge($keys, $redis->sMembers($table .':timed'));
     foreach ($keys as $key) {
       $redis->delete($key);
       //drupal_set_message('dredis_flush Deleting Key : ' . $key);
@@ -177,27 +218,29 @@ function dredis_flush($table = 'cache_page') {
 //	return TRUE;
 //}
 
+/**
+ * Connect to redis Database and Select the appropriate DB
+ *
+ * @param $table = 'cache'
+ *    Name of the Bin/Table to connect to
+ * @return Redis
+ *    Return the Redis object for further queries
+ */
 function dredis_connect($table = 'cache') {
   static $redis;
 
-  $server = variable_get('redis_servers', array('127.0.0.1:6379'));
-  list($host, $port) = explode(':', $server[0]);
-
   if (empty($redis)) {
-    /// @todo Add redis as static variable. Don't reconnect for every cache bin.
-    $redis = &new Redis();
+    $server = variable_get('redis_servers', array('127.0.0.1:6379'));
+    list($host, $port) = explode(':', $server[0]);
+
+  	$redis = new Redis();
 
     try {
       $redis->connect($host, $port);
     }
-    catch(RedisException$e) {
-      $hello = 'I will do something';
-      //echo 'Nice work exception';
-      //_cache_early_watchdog('cache', 'Unable to connect to Redis server %host:%port', array('%host' => $host, '%port' => $port), WATCHDOG_ERROR);
-      //      exit('Could Not Connect');
+    catch(RedisException $e) {
     }
-    catch(Exception$e) {
-      //echo 'Eception Caught';
+    catch(Exception $e) {
     }
   }
 
@@ -273,26 +316,24 @@ function dredis_key($key, $bin = 'cache') {
  *   The cache table name
  *
  * @return int
- *   Returns the number of DB to be use.
+ *   Returns the DB number to be use in Redis
  */
 function dredis_db($table = 'cache') {
-  static $mapping = array();
+  static $mapping;
 
   if (isset($mapping[$table])) {
     $return = $mapping[$table];
   }
-
-  if (!count($mapping)) {
+  else {
     //TODO: Store mapping in redis itself, use variable table as backup
-    //drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
-    $mapping = variable_get('redis_bins', array());
-    //drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
-
+    //Get values directly from DB as they weren't being pulled in via variable_get
+  	$results = db_result(db_query("SELECT value FROM {variable} WHERE name = 'redis_bins'"));
+    $mapping = unserialize($results);
     if (isset($mapping[$table])) {
       $return = $mapping[$table];
-      //drupal_set_message('Mappings returned from DB : ' . $return);
     }
     else {
+    	//TODO : Come up with a more stable scheme of assiging integers to cache tables
       $core = array('cache', 'cache_block', 'cache_form', 'cache_filter', 'cache_page', 'cache_menu');
       //						$cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
       $cache_tables = $core;
