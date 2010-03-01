@@ -15,7 +15,7 @@ function dredis_get($key, $table = 'cache') {
 
 	if($redis = dredis_connect($table)){
 		$cache = $redis->get(dredis_key($key, $table));
-		drupal_set_message('dredis_get Get Key : ' . urldecode(dredis_key($key, $table)));
+		//drupal_set_message('dredis_get Get Key : ' . urldecode(dredis_key($key, $table)));
 		return $cache;
 	}
 	return FALSE;
@@ -26,12 +26,12 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 	if($redis = dredis_connect($table)) {
 		$full_key = dredis_key($key, $table);
 		$redis->set($full_key, $value);
-		drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
+		//drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
 
 		// Set expiry date if specified
-		if($expire) {
+		if($expire > 0) {
 			$redis->setTimeout($full_key, $expire);
-			drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
+			//drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
 		}
 		else if($expire == -1) {
 			$redis->sAdd($table . ':temporary', $full_key);
@@ -104,26 +104,24 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 }
 
 function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
-  drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
+  //drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
 	if($redis = dredis_connect($table)) {
+		if ($cid == '*') {
+			return $redis->flushDB();
+		}
 		if ($wildcard) {
-			if ($cid == '*') {
-				$redis->flushDB();
-			}
-			else {
-				//Delete all the keys begging with $cid using wildcard
-				$allKeys = $redis->getKeys(dredis_key($cid . '*', $table));
-				foreach($allKeys as $key){
-					$redis->delete($key);
-					drupal_set_message('dredis_delete Deleted Key : ' . $key);
-					$redis->sRemove($table . ':temporary', $key);
-				}
+			//Delete all the keys begging with $cid using wildcard
+			$allKeys = $redis->getKeys(dredis_key($cid . '*', $table));
+			foreach($allKeys as $key){
+				$redis->delete($key);
+				//drupal_set_message('dredis_delete Deleted Key : ' . $key);
+				$redis->sRemove($table . ':temporary', $key);
 			}
 		}
 		else {
 			$key = dredis_key($cid, $table);
 			$redis->delete($key);
-			drupal_set_message('dredis_delete Deleted Key : ' . urldecode($key));
+			//drupal_set_message('dredis_delete Deleted Key : ' . urldecode($key));
 			$redis->sRemove($table . ':temporary', $key);
 		}
 	}
@@ -144,7 +142,7 @@ function dredis_flush($table = 'cache_page') {
 		//$delete_keys = "'" . implode("', '", $keys) . "'";
 		foreach($keys as $key) {
 			$redis->delete($key);
-			drupal_set_message('dredis_flush Deleting Key : ' . $key);
+			//drupal_set_message('dredis_flush Deleting Key : ' . $key);
 		}
 		$redis->delete($table .':temporary');
 		//  		$redis->delete($delete_keys)
@@ -184,15 +182,22 @@ function dredis_connect($table = 'cache') {
 	$server = variable_get('redis_servers', array('127.0.0.1:6379'));
 	list($host, $port) = explode(':', $server[0]);
 
-	if(is_null($redis)){
+	if(empty($redis)){
 		/// @todo Add redis as static variable. Don't reconnect for every cache bin.
-		$redis = new Redis();
-	}
+		$redis = &new Redis();
 
-	if (!$redis->connect($host, $port)) {
-		//_cache_early_watchdog('cache', 'Unable to connect to Redis server %host:%port', array('%host' => $host, '%port' => $port), WATCHDOG_ERROR);
-		exit('Could Not Connect');
-		return FALSE;
+		try{
+			$redis->connect($host, $port);
+		}
+		catch(RedisException $e) {
+			$hello = 'I will do something';
+			//echo 'Nice work exception';
+			//_cache_early_watchdog('cache', 'Unable to connect to Redis server %host:%port', array('%host' => $host, '%port' => $port), WATCHDOG_ERROR);
+//      exit('Could Not Connect');
+		}
+		catch(Exception $e) {
+      //echo 'Eception Caught';
+		}
 	}
 
 	// Change redis database if not default (0) specified.
@@ -201,7 +206,6 @@ function dredis_connect($table = 'cache') {
 			return FALSE;
 		}
 	}
-
 
 	//    if (variable_get('redis_cache_clear_all', FALSE) == TRUE) {
 	//      /// @todo Add ability to clear only specified Redis database. e.g. when we don't want to clear cache_form bin.
@@ -277,17 +281,17 @@ function dredis_db($table = 'cache') {
 
 	if (!count($mapping)) {
 		//TODO: Store mapping in redis itself, use variable table as backup
-		drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
+		//drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
 		$mapping = variable_get('redis_bins', array());
-		drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
+		//drupal_set_message('Mappings are being Regenrated : ' . var_export($mapping, true));
 
-		if(count($mapping) && isset($mapping[$table])) {
+		if(isset($mapping[$table])) {
 			$return = $mapping[$table];
-			drupal_set_message('Mappings returned from DB : ' . $return);
+			//drupal_set_message('Mappings returned from DB : ' . $return);
 		}
 		else {
 			$core = array('cache', 'cache_block', 'cache_form', 'cache_filter', 'cache_page', 'cache_menu');
-			//			$cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
+//						$cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
 			$cache_tables = $core;
 
 			sort($cache_tables);
@@ -296,11 +300,11 @@ function dredis_db($table = 'cache') {
 				$mapping[$cache_tables[($i-1)]] = $i;
 			}
 			variable_set('redis_bins', $mapping);
-			drupal_set_message('Mappings regenrated : ' . var_export($mapping, true));
+			//drupal_set_message('Mappings regenrated : ' . var_export($mapping, true));
 
 			$return = isset($mapping[$table]) ? $mapping[$table] : 0;
 		}
 	}
-//	drupal_set_message("{$table} - {$return}");
+//	//drupal_set_message("{$table} - {$return}");
 	return isset($return) ? $return : 0;
 }
