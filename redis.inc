@@ -25,6 +25,7 @@ require dirname(__FILE__) .'/dredis.php';
 function cache_get($cid, $table = 'cache') {
   global $user, $conf;
 
+  //drupal_set_message("Getting Cache for Key {$cid}, Table: {$table}");
   // Garbage collection necessary when enforcing a minimum cache lifetime
   //  $cache_flush = variable_get('cache_flush_'. $table, 0);
   //  if ($cache_flush && ($cache_flush + variable_get('cache_lifetime', 0) <= time())) {
@@ -67,6 +68,7 @@ function cache_get($cid, $table = 'cache') {
     //    }
     //    return $cache_object;
   }
+//  drupal_set_message("Getting Cache for Key {$cid}, Table: {$table} in: {$time}");
   return 0;
 }
 
@@ -116,7 +118,7 @@ function cache_get($cid, $table = 'cache') {
  */
 function cache_set($cid, $data, $table = 'cache', $expire = CACHE_PERMANENT, $headers = NULL) {
   //  return $cache->set($cid, $value, $expire, $headers, $table);
-
+//  drupal_set_message("Setting Cache for Key {$cid}, Table: {$table}, Expire: {$expire}");
   $created = time();
 
   // Create new cache object.
