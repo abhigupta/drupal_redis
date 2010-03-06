@@ -26,9 +26,8 @@ function dredis_get($key, $table = 'cache') {
 
 	$full_key = dredis_key($key, $table);
   if ($redis = dredis_connect($full_key)) {
-    $cache = $redis->get($full_key);
+    return $redis->get($full_key);
     //drupal_set_message('dredis_get Get Key : ' . urldecode(dredis_key($key, $table)));
-    return $cache;
   }
   return FALSE;
 }
@@ -121,7 +120,7 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
  */
 function dredis_flush($table = 'cache_page') {
 
-	if ($servers = dredis_connect($table)) {
+	if ($servers = dredis_connect($table, TRUE)) {
 		$db_id = variable_get('redis_db_id', 1);
 		foreach($servers as $redis) {
 			if($server->select($db_id)){
@@ -212,11 +211,7 @@ function dredis_connect($key, $return_all = FALSE) {
 
   	$server_id = 0;
   	if($active_servers > 1) {
-  		$table = $key;
-  		if(strpos($key, ':') !== FALSE) {
-  			list($table) = explode(':', $key);
-  		}
-  		$server_id = crc32($key) % ($active_servers);
+  		$server_id = crc32($key) % $active_servers;
 //  		drupal_set_message('Connecting to Redis server number : ' . $server_id);
 //  		drupal_set_message('CRC:' . crc32($key) . ' for Key: ' . $key);
   	}
