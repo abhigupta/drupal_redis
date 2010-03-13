@@ -1,7 +1,6 @@
 <?php
 // $Id$
 
-
 /**
  * @file
  * This file is alternative Drupal cache implementation. To configure
@@ -68,7 +67,7 @@ function cache_get($cid, $table = 'cache') {
     //    }
     //    return $cache_object;
   }
-//  drupal_set_message("Getting Cache for Key {$cid}, Table: {$table} in: {$time}");
+  //  drupal_set_message("Getting Cache for Key {$cid}, Table: {$table} in: {$time}");
   return 0;
 }
 
@@ -117,34 +116,19 @@ function cache_get($cid, $table = 'cache') {
  *   A string containing HTTP header information for cached pages.
  */
 function cache_set($cid, $data, $table = 'cache', $expire = CACHE_PERMANENT, $headers = NULL) {
-  //  return $cache->set($cid, $value, $expire, $headers, $table);
-//  drupal_set_message("Setting Cache for Key {$cid}, Table: {$table}, Expire: {$expire}");
-  $created = time();
-
+  //  drupal_set_message("Setting Cache for Key {$cid}, Table: {$table}, Expire: {$expire}");
+  // watchdog('redis', "Setting cache for %key in %table till %expire.", array(
+  //  '%key' => $cid, '%table' => $table, '%expire' => $expire));
   // Create new cache object.
   $cache          = new stdClass;
   $cache->cid     = $cid;
-  $cache->created = $created;
+  $cache->created = time();
   $cache->data    = $data;
   $cache->headers = $headers;
 
-  if ($expire == CACHE_TEMPORARY) {
-    // Convert CACHE_TEMPORARY (-1) into something that will live in redis
-    // until the next flush.
-
-    $cache->expire = $created + 2591999;
+  if ($expire != CACHE_PERMANENT && $expire != CACHE_TEMPORARY) {
+    $expire = ($expire - $cache->created);
   }
-  elseif ($expire == CACHE_PERMANENT) {
-    $cache->expire = 0;
-  }
-  else {
-    $cache->expire = $expire;
-    $expire = ($expire - $created);
-  }
-  // We manually track the expire time in $cache->expire.  When the object
-  // expires, we only allow one request to rebuild it to avoid cache stampedes.
-  // Other requests for the expired object while it is still being rebuilt get
-  // the expired object.
   dredis_set($cid, serialize($cache), $expire, $table);
 }
 

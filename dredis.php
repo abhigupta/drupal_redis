@@ -1,7 +1,6 @@
 <?php
 // $Id$
 
-
 /**
  * Redis cache engine.
  *
@@ -20,11 +19,12 @@
  *    Name of Key for which value is being fetched.
  * @param $table = 'cache'
  *    Name of Table/Bin to get results from
+ *
  * @return Cache Data if found or FALSE
  */
 function dredis_get($key, $table = 'cache') {
 
-	$full_key = dredis_key($key, $table);
+  $full_key = dredis_key($key, $table);
   if ($redis = dredis_connect($full_key)) {
     return $redis->get($full_key);
     //drupal_set_message('dredis_get Get Key : ' . urldecode(dredis_key($key, $table)));
@@ -52,26 +52,26 @@ function dredis_get($key, $table = 'cache') {
  */
 function dredis_set($key, $value, $expire = 0, $table = 'cache') {
 
-	$full_key = dredis_key($key, $table);
-	if ($redis = dredis_connect($full_key)) {
+  $full_key = dredis_key($key, $table);
+  if ($redis = dredis_connect($full_key)) {
 
-		$redis->set($full_key, $value);
-		//drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
+    $redis->set($full_key, $value);
+    //drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
 
-		// Set expiry date if expire != CACHE_PERMANENT
-		if ($expire > 0) {
-			$redis->setTimeout($full_key, $expire);
-			//      $redis->sAdd($table .':timed', $full_key);
-			//drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
-		}
-		// Save the Key to Temporary Set if the Key is CACHE_TEMPORARY
-		// This will be cleared during dredis_flush_temporary
-		else if ($expire == -1) {
-			$redis->sAdd($table .':temporary', $full_key);
-		}
-	}
-
+    // Set expiry date if expire != CACHE_PERMANENT
+    if ($expire > 0) {
+      $redis->setTimeout($full_key, $expire);
+      //      $redis->sAdd($table .':timed', $full_key);
+      //drupal_set_message('dredis_set Setting Expiry to ' . $expire . ' for: ' . urldecode($full_key));
+    }
+    // Save the Key to Temporary Set if the Key is CACHE_TEMPORARY
+    // This will be cleared during dredis_flush_temporary
+    elseif ($expire == -1) {
+      $redis->sAdd($table .':temporary', $full_key);
+    }
+  }
 }
+
 /**
  * Delete cache entries from Redis
  *
@@ -85,31 +85,31 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
  *    Name of table where the key is stored
  */
 function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
-  //drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
-	if ($wildcard) {
-		$wildcard_key = ($cid === '*') ? '*' : $cid . '*';
+  //  drupal_set_message("cid: {$cid} , table: {$table}, wildcard: {$wildcard}");
 
-		// Get a list of all keys that satisfy the wildcard
-		$allKeys = $redis->getKeys(dredis_key('*', $table));
+  if ($wildcard) {
+    $key_id = ($cid === '*') ? '' : $cid;
+    $wildcard_key = dredis_key($key_id, $table) .'*';
 
-		//Delete all the keys returned
-		foreach ($allKeys as $key) {
-			$redis = dredis_connect($key);
-			$redis->delete($key);
-			//Delete Keys from temporary set if present
-			if($cid !== '*') {
-				$redis->sRemove($table .':temporary', $key);
-			}
-		}
-	}
-	else {
-		$full_key = dredis_key($cid, $table);
-		$redis = dredis_connect($cid);
-
-		$redis->delete($full_key);
-		//drupal_set_message('dredis_delete Deleted Key : ' . urldecode($key));
-		$redis->sRemove($table .':temporary', $full_key);
-	}
+    // Get a list of all keys that satisfy the wildcard
+    $servers = dredis_connect($table, TRUE);
+    $db_id = variable_get('redis_db_id', 1);
+    foreach ($servers as $redis) {
+      $redis->select($db_id);
+      $keys = (array)$redis->getKeys($wildcard_key);
+      $redis->delete($keys);
+      foreach ($keys as $key) {
+        $redis->sRemove($table .':temporary', $key);
+      }
+    }
+  }
+  else {
+    $key = dredis_key($cid, $table);
+    $redis = dredis_connect($key);
+    $redis->delete($key);
+    //Delete Keys from temporary set if present
+    $redis->sRemove($table .':temporary', $key);
+  }
 }
 
 /**
@@ -120,24 +120,19 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
  */
 function dredis_flush($table = 'cache_page') {
 
-	if ($servers = dredis_connect($table, TRUE)) {
-		$db_id = variable_get('redis_db_id', 1);
-		foreach($servers as $redis) {
-			if($server->select($db_id)){
-				// Get all the keys from temporary set.
-				$keys = $redis->sMembers($table .':temporary');
-
-				// TODO: Find a syntax to delete all keys at once
-				foreach ($keys as $key) {
-					$redis->delete($key);
-					//drupal_set_message('dredis_flush Deleting Key : ' . $key);
-				}
-				$redis->delete($table .':temporary');
-			}
-
-		}
-		//  		$redis->delete($delete_keys)
-	}
+  //	drupal_set_message("Flush table: {$table}");
+  if ($servers = dredis_connect($table, TRUE)) {
+    $db_id = variable_get('redis_db_id', 1);
+    foreach ($servers as $redis) {
+      if ($redis->select($db_id)) {
+        // Get all the keys from temporary set.
+        $keys = $redis->sMembers($table .':temporary');
+        $redis->delete($keys);
+        //drupal_set_message('dredis_flush Deleting Key : ' . $key);
+        $redis->delete($table .':temporary');
+      }
+    }
+  }
 }
 
 //function dredis_lock($key = '') {
@@ -172,12 +167,13 @@ function dredis_flush($table = 'cache_page') {
 //}
 
 /**
- * Connect to redis Database and Select the appropriate DB
+ * Connect to redis Database and Select the appropriate DB.
  *
- * @param $table = 'cache'
- *    Name of the Bin/Table to connect to
+ * @param $key
+ *    Full Key
+ *
  * @return Redis
- *    Return the Redis object for further queries
+ *    Return the Redis object.
  */
 function dredis_connect($key, $return_all = FALSE) {
   static $redis = array();
@@ -186,47 +182,45 @@ function dredis_connect($key, $return_all = FALSE) {
   if (!count($redis)) {
     $servers = variable_get('redis_servers', array('127.0.0.1:6379'));
     $total_servers = count($servers);
-    //drupal_set_message('Total Redis Servers : ' . "$total_servers");
+    //    drupal_set_message('Total Redis Servers : ' . "$total_servers");
     // Loop through all redis servers and add them to $redis array
-    for($i = 0; $i < $total_servers; $i++) {
-    	list($host, $port) = explode(':', $servers[$i]);
-    	$tmp_server = new Redis();
-    	try {
-    		if($tmp_server->connect($host, $port)) {
-    			$redis[$i] = $tmp_server;
-//    			drupal_set_message('Connected to Redis server at : ' . "$host - $port");
-    		}
-    	}
-    	catch(RedisException $e) {
-    		drupal_set_message('Could not connect to Redis server at : ' . "$host - $port");
-    	}
+    for ($i = 0; $i < $total_servers; $i++) {
+      list($host, $port) = explode(':', $servers[$i]);
+      $tmp_server = new Redis();
+      try {
+        $tmp_server->connect($host, $port);
+        $redis[$i] = $tmp_server;
+        //    			drupal_set_message('Connected to Redis server at : ' . "$host - $port");
+      }
+      catch(RedisException$e) {
+        drupal_set_message('Caught Exception: '. $e->getMessage());
+      }
     }
   }
 
-  if($active_servers = count($redis)) {
+  if ($active_servers = count($redis)) {
 
-  	if($return_all) {
-  		return $redis;
-  	}
+    if ($return_all) {
+      return $redis;
+    }
 
-  	$server_id = 0;
-  	if($active_servers > 1) {
-  		$server_id = crc32($key) % $active_servers;
-//  		drupal_set_message('Connecting to Redis server number : ' . $server_id);
-//  		drupal_set_message('CRC:' . crc32($key) . ' for Key: ' . $key);
-  	}
+    $server_id = 0;
+    if ($active_servers > 1) {
+      $server_id = crc32($key) % $active_servers;
+      //  		drupal_set_message('Connecting to Redis server number : ' . $server_id);
+      //  		drupal_set_message('CRC:' . crc32($key) . ' for Key: ' . $key);
+    }
 
-  	if(empty($db_id)) {
-  		$db_id = variable_get('redis_db_id', 1);
-  	}
+    if (empty($db_id)) {
+      $db_id = variable_get('redis_db_id', 1);
+    }
 
-  	if($redis[$server_id]->select($db_id)) {
-  		return $redis[$server_id];
-  	}
+    if ($redis[$server_id]->select($db_id)) {
+      return $redis[$server_id];
+    }
   }
 
   return FALSE;
-
 }
 
 //function close() {
@@ -278,3 +272,4 @@ function dredis_key($key, $bin = 'cache') {
 
   return urlencode($full_key);
 }
+
