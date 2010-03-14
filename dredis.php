@@ -105,10 +105,11 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
   }
   else {
     $key = dredis_key($cid, $table);
-    $redis = dredis_connect($key);
-    $redis->delete($key);
-    //Delete Keys from temporary set if present
-    $redis->sRemove($table .':temporary', $key);
+    if($redis = dredis_connect($key)) {
+    	$redis->delete($key);
+    	//Delete Keys from temporary set if present
+    	$redis->sRemove($table .':temporary', $key);
+    }
   }
 }
 

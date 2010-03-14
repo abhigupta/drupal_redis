@@ -23,6 +23,9 @@ class RedisCacheTestCase extends DrupalWebTestCase {
 
     $cache = cache_get($cid, $table);
 
+//    $this->assertText(t('Looking for !cid in !table', array('!cid' => $cid, '!table' => $table)));
+//    $this->assertText(t('Returned data !data', array('!data' => var_export($cache, TRUE))));
+
     return isset($cache->data) && $cache->data == $var;
   }
 
@@ -99,7 +102,7 @@ class RedisCacheTestCase extends DrupalWebTestCase {
   }
 }
 
-class RedisCacheSavingCase extends CacheTestCase {
+class RedisCacheSavingCase extends RedisCacheTestCase {
   /**
    * Implementation of getInfo().
    */
@@ -164,7 +167,7 @@ class RedisCacheSavingCase extends CacheTestCase {
   }
 }
 
-class RedisCacheClearCase extends CacheTestCase {
+class RedisCacheClearCase extends RedisCacheTestCase {
   /**
    * Implementation of getInfo().
    */
@@ -234,7 +237,7 @@ class RedisCacheClearCase extends CacheTestCase {
   }
 }
 
-class RedisCacheExpiryCase extends CacheTestCase {
+class RedisCacheExpiryCase extends RedisCacheTestCase {
   /**
    * Implementation of getInfo().
    */
