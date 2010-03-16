@@ -356,7 +356,7 @@ class RedisCacheExpiryCase extends RedisCacheTestCase {
     $this->setupLifetime(0);
     cache_set($this->default_cid, $this->default_value, $this->default_table, time() + 2);
 
-    $this->assertCacheExists(t('Unix timestamp cache data without lifetime exists before wipe.'));
+    $this->assertCacheExists(t('Unix timestamp cache without lifetime exists before wipe.'));
     $this->generalWipe();
     $this->assertCacheExists(t('Unix timestamp cache without lifetime exists after wipe.'));
     sleep(4); // expire

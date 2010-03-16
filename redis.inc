@@ -26,46 +26,42 @@ function cache_get($cid, $table = 'cache') {
 
   //drupal_set_message("Getting Cache for Key {$cid}, Table: {$table}");
   // Garbage collection necessary when enforcing a minimum cache lifetime
-  //  $cache_flush = variable_get('cache_flush_'. $table, 0);
-  //  if ($cache_flush && ($cache_flush + variable_get('cache_lifetime', 0) <= time())) {
-  //    // Reset the variable immediately to prevent a meltdown in heavy load situations.
-  //    variable_set('cache_flush_'. $table, 0);
-  //    // Time to flush old cache data.
-  //    dredis_flush($table);
-  //  }
+  $cache_flush = variable_get('cache_flush_'. $table, 0);
+  if ($cache_flush && ($cache_flush + variable_get('cache_lifetime', 0) <= time())) {
+  	// Reset the variable immediately to prevent a meltdown in heavy load situations.
+  	variable_set('cache_flush_'. $table, 0);
+  	// Time to flush old cache data.
+  	dredis_flush($table);
+  }
 
   $cache_object = unserialize(dredis_get($cid, $table));
   if (isset($cache_object->data)) {
-    if ($user->cache > $cache_object->created) {
-      return 0;
+//    if (variable_get('cache_lifetime', 0) && $user->cache > $cache_object->created) {
+//      return 0;
+//    }
+//    else {
+//      return $cache_object;
+//    }
+    // If the data is permanent or we're not enforcing a minimum cache lifetime
+    // always return the cached data.
+    if ($cache_object->expire == CACHE_PERMANENT || !variable_get('cache_lifetime', 0)) {
+    	return $cache_object;
     }
+    // If enforcing a minimum cache lifetime, validate that the data is
+    // currently valid for this user before we return it by making sure the
+    // cache entry was created before the timestamp in the current session's
+    // cache timer. The cache variable is loaded into the $user object by
+    // sess_read() in session.inc.
     else {
-      return $cache_object;
+    	if ($user->cache > $cache_object->created) {
+    		// This cache data is too old and thus not valid for us, ignore it.
+    		return 0;
+    	}
+    	else {
+    		return $cache_object;
+    	}
     }
-    //    // If the data is permanent or we're not enforcing a minimum cache lifetime
-    //    // always return the cached data.
-    //    if ($cache_object->expire == CACHE_PERMANENT || !variable_get('cache_lifetime', 0)) {
-    ////      if ($cache_object->serialized) {
-    ////        $cache_object->data = unserialize($cache_object->data);
-    ////      }
-    //    }
-    //    // If enforcing a minimum cache lifetime, validate that the data is
-    //    // currently valid for this user before we return it by making sure the
-    //    // cache entry was created before the timestamp in the current session's
-    //    // cache timer. The cache variable is loaded into the $user object by
-    //    // sess_read() in session.inc.
-    //    else {
-    //      if ($user->cache > $cache_object->created) {
-    //        // This cache data is too old and thus not valid for us, ignore it.
-    //        return 0;
-    //      }
-    //      else {
-    //        if ($cache_object->serialized) {
-    //          $cache_object->data = unserialize($cache_object->data);
-    //        }
-    //      }
-    //    }
-    //    return $cache_object;
+//    return $cache_object;
   }
   //  drupal_set_message("Getting Cache for Key {$cid}, Table: {$table} in: {$time}");
   return 0;
@@ -125,8 +121,9 @@ function cache_set($cid, $data, $table = 'cache', $expire = CACHE_PERMANENT, $he
   $cache->created = time();
   $cache->data    = $data;
   $cache->headers = $headers;
+  $cache->expire  = $expire;
 
-  if ($expire != CACHE_PERMANENT && $expire != CACHE_TEMPORARY) {
+  if ($expire !== CACHE_PERMANENT && $expire !== CACHE_TEMPORARY) {
     $expire = ($expire - $cache->created);
   }
   dredis_set($cid, serialize($cache), $expire, $table);

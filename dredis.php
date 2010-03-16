@@ -97,8 +97,8 @@ function dredis_delete($cid = '*', $wildcard = FALSE, $table = 'cache') {
     foreach ($servers as $redis) {
       $redis->select($db_id);
       $keys = (array)$redis->getKeys($wildcard_key);
-      $redis->delete($keys);
       foreach ($keys as $key) {
+      	$redis->delete($key);
         $redis->sRemove($table .':temporary', $key);
       }
     }
@@ -125,13 +125,14 @@ function dredis_flush($table = 'cache_page') {
   if ($servers = dredis_connect($table, TRUE)) {
     $db_id = variable_get('redis_db_id', 1);
     foreach ($servers as $redis) {
-      if ($redis->select($db_id)) {
-        // Get all the keys from temporary set.
-        $keys = $redis->sMembers($table .':temporary');
-        $redis->delete($keys);
-        //drupal_set_message('dredis_flush Deleting Key : ' . $key);
-        $redis->delete($table .':temporary');
-      }
+    	$redis->select($db_id);
+    	// Get all the keys from temporary set.
+    	$keys = $redis->sMembers($table .':temporary');
+    	foreach ($keys as $key) {
+    		$redis->delete($key);
+    	}
+    	//drupal_set_message('dredis_flush Deleting Key : ' . $key);
+    	$redis->delete($table .':temporary');
     }
   }
 }
