@@ -56,7 +56,6 @@ function dredis_set($key, $value, $expire = 0, $table = 'cache') {
   if ($redis = dredis_connect($full_key)) {
 
     $redis->set($full_key, $value);
-    //drupal_set_message('dredis_set Setting Key : ' . urldecode($full_key));
 
     // Set expiry date if expire != CACHE_PERMANENT
     if ($expire > 0) {
